@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ShieldOps — Firebase Setup</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0d1117; color: #e6edf3; font-family: 'Segoe UI', sans-serif; font-size: 14px; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .box { background: #161b22; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 40px; width: 100%; max-width: 560px; }
+    h1 { font-size: 22px; margin-bottom: 6px; }
+    .sub { color: #8b949e; margin-bottom: 28px; font-size: 13px; }
+    .step { background: #1c2333; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 16px 18px; margin-bottom: 10px; display: flex; align-items: center; gap: 14px; }
+    .step-num { width: 28px; height: 28px; border-radius: 50%; background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.3); color: #38bdf8; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .step-text { font-size: 13px; color: #8b949e; flex: 1; }
+    .step-text b { color: #e6edf3; }
+    .step.done .step-num { background: rgba(63,185,80,0.15); border-color: rgba(63,185,80,0.3); color: #3fb950; }
+    .step.error .step-num { background: rgba(248,81,73,0.15); border-color: rgba(248,81,73,0.3); color: #f85149; }
+    .btn { background: #38bdf8; color: #0d1117; font-weight: 700; border: none; border-radius: 8px; padding: 12px 28px; cursor: pointer; font-size: 14px; width: 100%; margin-top: 20px; transition: opacity .15s; }
+    .btn:hover { opacity: 0.9; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .log { background: #010409; border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 14px; margin-top: 20px; font-family: monospace; font-size: 12px; color: #79c0ff; max-height: 200px; overflow-y: auto; white-space: pre-wrap; display: none; }
+    .creds { background: rgba(63,185,80,0.08); border: 1px solid rgba(63,185,80,0.25); border-radius: 8px; padding: 16px; margin-top: 20px; display: none; }
+    .creds h3 { color: #3fb950; margin-bottom: 12px; font-size: 14px; }
+    .cred-row { display: flex; gap: 10px; margin-bottom: 8px; font-size: 13px; }
+    .cred-label { color: #8b949e; min-width: 100px; }
+    .cred-val { font-family: monospace; color: #e6edf3; }
+    .warning { background: rgba(210,153,34,0.1); border: 1px solid rgba(210,153,34,0.3); border-radius: 6px; padding: 10px 14px; font-size: 12px; color: #d29922; margin-top: 14px; }
+  </style>
+</head>
+<body>
+<div class="box">
+  <div style="font-size:40px;margin-bottom:12px">🛡️</div>
+  <h1>ShieldOps — One-Click Setup</h1>
+  <p class="sub">This will create all user accounts and sample data in your Firebase project automatically.</p>
+
+  <div class="step" id="s1"><div class="step-num">1</div><div class="step-text"><b>Create Admin account</b> — admin@shieldops.io</div></div>
+  <div class="step" id="s2"><div class="step-num">2</div><div class="step-text"><b>Create Analyst account</b> — analyst@shieldops.io</div></div>
+  <div class="step" id="s3"><div class="step-num">3</div><div class="step-text"><b>Create Customer account</b> — customer@shieldops.io</div></div>
+  <div class="step" id="s4"><div class="step-num">4</div><div class="step-text"><b>Save user profiles</b> to Firestore with roles</div></div>
+  <div class="step" id="s5"><div class="step-num">5</div><div class="step-text"><b>Create test tenant</b> — Acme Web Solutions</div></div>
+  <div class="step" id="s6"><div class="step-num">6</div><div class="step-text"><b>Create sample alert</b> — Brute Force Attack (high severity)</div></div>
+  <div class="step" id="s7"><div class="step-num">7</div><div class="step-text"><b>Create sample case</b> with IOCs and findings</div></div>
+
+  <button class="btn" id="runBtn" onclick="runSetup()">🚀 Run Setup Now</button>
+
+  <div class="log" id="log"></div>
+  <div class="creds" id="creds">
+    <h3>✅ Setup Complete — Your Login Credentials</h3>
+    <div class="cred-row"><span class="cred-label">Admin Portal</span><span class="cred-val">admin@shieldops.io / ShieldOps@Admin2024</span></div>
+    <div class="cred-row"><span class="cred-label">SOC Console</span><span class="cred-val">analyst@shieldops.io / ShieldOps@Analyst2024</span></div>
+    <div class="cred-row"><span class="cred-label">Customer Portal</span><span class="cred-val">customer@shieldops.io / ShieldOps@Customer2024</span></div>
+    <div class="warning">⚠️ Save these passwords now. You can change them in Firebase Console → Authentication after logging in.</div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js'
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js'
+import { getFirestore, doc, setDoc, addDoc, collection, Timestamp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js'
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA6xjRcfzxbQxivqDyBaSNt4ypYtQuOWrg",
+  authDomain: "soc-dashboard-1c74c.firebaseapp.com",
+  projectId: "soc-dashboard-1c74c",
+  storageBucket: "soc-dashboard-1c74c.firebasestorage.app",
+  messagingSenderId: "646482290414",
+  appId: "1:646482290414:web:9b595c9b27a4d25230f5ff"
+}
+
+const app = initializeApp(firebaseConfig)
+const auth = getAuth(app)
+const db = getFirestore(app)
+
+const ACCOUNTS = [
+  { email: 'admin@shieldops.io',    password: 'ShieldOps@Admin2024',    name: 'ShieldOps Admin',   role: 'admin'   },
+  { email: 'analyst@shieldops.io',  password: 'ShieldOps@Analyst2024',  name: 'SOC Analyst',       role: 'analyst' },
+  { email: 'customer@shieldops.io', password: 'ShieldOps@Customer2024', name: 'Acme Web Solutions', role: 'owner'  }
+]
+
+function log(msg) {
+  const el = document.getElementById('log')
+  el.style.display = 'block'
+  el.textContent += msg + '\n'
+  el.scrollTop = el.scrollHeight
+}
+
+function stepDone(id) { document.getElementById(id).className = 'step done'; document.getElementById(id).querySelector('.step-num').textContent = '✓' }
+function stepError(id, msg) { document.getElementById(id).className = 'step error'; document.getElementById(id).querySelector('.step-text').innerHTML += `<br><span style="color:#f85149;font-size:11px">${msg}</span>` }
+
+async function createUser(account) {
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, account.email, account.password)
+    log(`  ✓ Created auth user: ${account.email}`)
+    return cred.user.uid
+  } catch (e) {
+    if (e.code === 'auth/email-already-in-use') {
+      log(`  ℹ Already exists: ${account.email} — signing in to get UID`)
+      const cred = await signInWithEmailAndPassword(auth, account.email, account.password)
+      return cred.user.uid
+    }
+    throw e
+  }
+}
+
+window.runSetup = async function () {
+  document.getElementById('runBtn').disabled = true
+  document.getElementById('runBtn').textContent = '⏳ Setting up…'
+
+  const uids = {}
+
+  try {
+    // Step 1 — Admin
+    log('Creating admin account…')
+    uids.admin = await createUser(ACCOUNTS[0])
+    stepDone('s1')
+
+    // Step 2 — Analyst
+    log('Creating analyst account…')
+    uids.analyst = await createUser(ACCOUNTS[1])
+    stepDone('s2')
+
+    // Step 3 — Customer
+    log('Creating customer account…')
+    uids.customer = await createUser(ACCOUNTS[2])
+    stepDone('s3')
+
+    // Step 4 — User profiles in Firestore
+    log('Saving user profiles to Firestore…')
+    for (const [key, uid] of Object.entries(uids)) {
+      const acc = ACCOUNTS[key === 'admin' ? 0 : key === 'analyst' ? 1 : 2]
+      await setDoc(doc(db, 'users', uid), {
+        uid,
+        email: acc.email,
+        name: acc.name,
+        role: acc.role,
+        tenant_id: key === 'customer' ? 'tenant_acme' : null,
+        created_at: Timestamp.now()
+      })
+      log(`  ✓ Saved profile: ${acc.email} (${acc.role})`)
+    }
+    stepDone('s4')
+
+    // Step 5 — Test tenant
+    log('Creating test tenant…')
+    await setDoc(doc(db, 'tenants', 'tenant_acme'), {
+      company_name: 'Acme Web Solutions',
+      domain: 'acme.ie',
+      plan: 'pro',
+      status: 'active',
+      hosting_provider: 'SiteGround',
+      cms_platform: 'wordpress',
+      critical_urls: ['/wp-admin', '/checkout', '/login'],
+      alert_contacts: ['customer@shieldops.io'],
+      cloudflare_connected: true,
+      cloudflare_zone_id: 'demo_zone_id',
+      plugin_installed: true,
+      analyst_assigned: uids.analyst,
+      notes: 'Test tenant — created by ShieldOps setup',
+      page_hash_baseline: '',
+      ssl_expiry_date: Timestamp.fromDate(new Date(Date.now() + 90 * 86400000)),
+      uptime_check_interval: 5,
+      created_at: Timestamp.now()
+    })
+    log('  ✓ Tenant created: Acme Web Solutions (Pro plan)')
+    stepDone('s5')
+
+    // Step 6 — Sample alert
+    log('Creating sample alert…')
+    const slaDeadline = Timestamp.fromDate(new Date(Date.now() + 24 * 3600000))
+    const alertRef = await addDoc(collection(db, 'alerts'), {
+      tenant_id: 'tenant_acme',
+      case_id: 'CASE-001',
+      title: 'Brute Force Attack on WordPress Login',
+      type: 'brute_force',
+      severity: 'high',
+      status: 'open',
+      assigned_to: uids.analyst,
+      detected_at: Timestamp.now(),
+      sla_deadline: slaDeadline,
+      raw_evidence: {
+        ip: '185.234.219.47',
+        url: '/wp-admin/wp-login.php',
+        user_agent: 'Mozilla/5.0 (compatible; AttackBot/1.0)',
+        attempt_count: 847,
+        response_code: 401,
+        page_diff: ''
+      },
+      ai_summary: 'Your website\'s login page received 847 failed login attempts from a single IP address in Romania over the past 2 hours. This is a brute force attack trying to guess your admin password. Your site is currently blocking these attempts, but we recommend changing your admin password and enabling two-factor authentication as a precaution.',
+      customer_visible_summary: 'Someone tried to break into your website admin area 847 times. We detected and logged every attempt. Your site remains secure. We recommend changing your WordPress admin password as a precaution.',
+      ai_recommended_actions: [
+        'Block the attacking IP address 185.234.219.47 at your firewall',
+        'Change all WordPress administrator passwords immediately',
+        'Enable two-factor authentication on WordPress admin',
+        'Limit login attempts to 5 per 10 minutes using a security plugin',
+        'Review all admin user accounts for any unauthorized access'
+      ],
+      analyst_notes: '',
+      actions_taken: [],
+      created_at: Timestamp.now()
+    })
+    log(`  ✓ Alert created: CASE-001 (high severity brute force)`)
+
+    // Add an IOC for the alert
+    await addDoc(collection(db, 'iocs'), {
+      tenant_id: 'tenant_acme',
+      alert_id: alertRef.id,
+      value: '185.234.219.47',
+      type: 'ip',
+      verdict: 'malicious',
+      enrichment_source: 'AbuseIPDB',
+      enrichment_data: {
+        country: 'RO',
+        isp: 'Hostinger International',
+        abuse_score: 89,
+        vt_detections: 14,
+        vt_total: 72,
+        reports_count: 47,
+        last_reported: new Date().toISOString()
+      },
+      shared_intel: false,
+      created_at: Timestamp.now()
+    })
+    log('  ✓ IOC added: 185.234.219.47 (malicious)')
+    stepDone('s6')
+
+    // Step 7 — Sample case + finding
+    log('Creating sample investigation case…')
+    const caseRef = await addDoc(collection(db, 'cases'), {
+      tenant_id: 'tenant_acme',
+      title: 'Brute Force Attack — acme.ie',
+      description: 'Sustained brute force attack against WordPress login endpoint from Romanian IP block.',
+      severity: 'high',
+      status: 'investigating',
+      analyst: uids.analyst,
+      tags: ['brute-force', 'wordpress', 'credential-attack'],
+      mitre_tactics: ['TA0006 Credential Access'],
+      mitre_techniques: ['T1110 Brute Force'],
+      notes: 'High volume attack from single IP. Customer notified.',
+      ioc_ids: [],
+      ai_summary: 'This case involves a sustained brute force credential attack targeting the WordPress admin login. The attacker used automated tooling to attempt 847 logins over 2 hours from a single Romanian IP with a high abuse score.',
+      created_at: Timestamp.now(),
+      updated_at: Timestamp.now()
+    })
+
+    await addDoc(collection(db, 'findings'), {
+      case_id: caseRef.id,
+      tenant_id: 'tenant_acme',
+      title: 'Automated Credential Attack Detected',
+      description: 'Attacker used automated tooling to perform high-volume brute force against /wp-admin/wp-login.php. 847 attempts in 2 hours from single IP.',
+      evidence: 'IP: 185.234.219.47\nAttempts: 847\nTimeframe: 2 hours\nTarget: /wp-admin/wp-login.php\nAll attempts returned HTTP 401',
+      mitre_technique: 'T1110 Brute Force',
+      severity: 'high',
+      timestamp: Timestamp.now(),
+      created_at: Timestamp.now()
+    })
+    log('  ✓ Case and finding created')
+    stepDone('s7')
+
+    log('\n✅ All done! Firebase is fully set up.')
+    document.getElementById('creds').style.display = 'block'
+    document.getElementById('runBtn').textContent = '✅ Setup Complete'
+
+  } catch (err) {
+    log(`\n❌ Error: ${err.message}`)
+    document.getElementById('runBtn').disabled = false
+    document.getElementById('runBtn').textContent = '🔄 Retry Setup'
+    console.error(err)
+  }
+}
+</script>
+</body>
+</html>

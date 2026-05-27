@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+*.zip
+
+# Temp files
+zi4Wfew4
+ziTBqDYp
+zikh5lXP
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Editor
+.DS_Store
+.vscode/
+.idea/
+
+# Logs
+npm-debug.log*
+yarn-error.log*
